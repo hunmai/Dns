@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Cloudflare DNS Manager</title>
+<style>
+body{font-family:sans-serif;padding:20px;background:#f5f5f5;}
+input,select,button{padding:8px;margin:4px 0;width:100%;}
+button{cursor:pointer;background:#0ea5e9;color:#fff;border:none;border-radius:6px;}
+.msg{margin-top:10px;padding:8px;border-radius:6px;}
+.msg-ok{background:#d1fae5;color:#065f46;}
+.msg-err{background:#fee2e2;color:#991b1b;}
+</style>
+</head>
+<body>
+<h2>Cloudflare DNS Manager</h2>
+<div>
+<label>Type</label>
+<select id="type">
+<option>A</option><option>AAAA</option><option>CNAME</option><option>TXT</option><option>MX</option>
+</select>
+
+<label>Host</label>
+<input id="name" placeholder="sub.example.com">
+
+<label>Content</label>
+<input id="content" placeholder="e.g. 1.2.3.4">
+
+<label>TTL (seconds)</label>
+<input id="ttl" type="number" value="300">
+
+<label>Proxied</label>
+<select id="proxied">
+<option value="false">DNS Only</option>
+<option value="true">Proxied</option>
+</select>
+
+<button id="addBtn">Add / Update Record</button>
+<div id="msg" class="msg"></div>
+</div>
+
+<script>
+const ZONE_ID = "cd4ddb94654aa941d33dc95f9865a338";
+const API_TOKEN = "1234567893feefc5f0q5000bfo0c38d90bbeb";
+const API_BASE = "https://api.cloudflare.com/client/v4/zones/" + ZONE_ID + "/dns_records";
+
+function showMsg(text, ok=true){
+  const el = document.getElementById("msg");
+  el.textContent = text;
+  el.className = ok?"msg msg-ok":"msg msg-err";
+}
+
+document.getElementById("addBtn").addEventListener("click", async ()=>{
+  const type = document.getElementById("type").value;
+  const name = document.getElementById("name").value.trim();
+  const content = document.getElementById("content").value.trim();
+  const ttl = parseInt(document.getElementById("ttl").value,10)||300;
+  const proxied = document.getElementById("proxied").value==="true";
+
+  if(!name||!content){ showMsg("กรุณากรอก Host และ Content",false); return; }
+
+  showMsg("Processing...");
+
+  try{
+    // เช็คว่ามี Record อยู่ก่อน
+    const listRes = await fetch(API_BASE+"?name="+encodeURIComponent(name),{
+      headers:{"Authorization":"Bearer "+API_TOKEN,"Content-Type":"application/json"}
+    });
+    const listData = await listRes.json();
+    let method="POST", url = API_BASE;
+    let recordId = null;
+
+    if(listData.result && listData.result.length>0){
+      recordId = listData.result[0].id;
+      method="PUT";
+      url = API_BASE+"/"+recordId;
+    }
+
+    const res = await fetch(url,{
+      method,
+      headers:{"Authorization":"Bearer "+API_TOKEN,"Content-Type":"application/json"},
+      body: JSON.stringify({type,name,content,ttl,proxied})
+    });
+    const data = await res.json();
+    if(data.success){
+      showMsg("✅ Record saved: "+name+" → "+content);
+    } else {
+      showMsg("❌ Error: "+JSON.stringify(data.errors),false);
+    }
+  }catch(err){
+    showMsg("❌ Network error: "+err.message,false);
+  }
+});
+</script>
+</body>
+</html>
